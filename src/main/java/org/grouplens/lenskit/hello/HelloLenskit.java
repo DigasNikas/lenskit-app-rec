@@ -110,25 +110,6 @@ public class HelloLenskit implements Runnable{
         logger.info("reading aptoide config file");
         readAptoideConfigFile();
         dataFile = Paths.get(getDataFile());
-        /*String csvFile = getTestInputFile();
-        String line = "";
-        String[] str;
-        try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
-            while ((line = br.readLine()) != null) {
-                lines.add(line);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.exit(1);
-        }
-        for (String arg: lines) {
-            items = new ArrayList<>(arg.length());
-            str = arg.split(cvsSplitBy);
-            for (String st: str) {
-                items.add(Long.parseLong(st));
-            }
-            total_items.add(items);
-        }*/
     }
 
     // Method to read aptoide config file
@@ -358,33 +339,6 @@ public class HelloLenskit implements Runnable{
                     }
                     thread_timer.stop();
                     logger.info("recommended in {}", thread_timer);
-                    /*Stopwatch thread_timer = Stopwatch.createStarted();
-                    for (List<Long> used_items : total_items) {
-                        logger.info("using {} reference items: {}", used_items.size(), used_items);
-                        //int amount = (int) Math.floor((used_items.size() + 2) / 3);
-                        Entity AppData = dao.lookupEntity(CommonTypes.ITEM, used_items.get(0));
-                        String AppName = null;
-                        if (AppData != null) {
-                            AppName = AppData.maybeGet(CommonAttributes.NAME);
-                        }
-                        String to_append = "\"" + AppName + "\"" + cvsSplitBy;
-                        Stopwatch timer2 = Stopwatch.createStarted();
-                        ResultList recs = irec.recommendRelatedItemsWithDetails(LongUtils.packedSet(used_items), Integer.valueOf(getAmountRecs()), null, null);
-                        timer2.stop();
-                        logger.info("recommended in {}", timer2);
-                        for (Result item : recs) {
-                            Entity itemData = dao.lookupEntity(CommonTypes.ITEM, item.getId());
-                            String name = null;
-                            if (itemData != null) {
-                                name = itemData.maybeGet(CommonAttributes.NAME);
-                            }
-                            to_append = to_append + "(\"" + name + "\"" + cvsSplitBy + String.valueOf(item.getScore()) + ")" + cvsSplitBy;
-                        }
-                        to_append = to_append + newLine;
-                        fw.append(to_append);
-                    }
-                    thread_timer.stop();
-                    logger.info("recommended in {}", thread_timer);*/
                 }
             } catch (Exception e) {
                 e.printStackTrace();
