@@ -21,6 +21,10 @@
  */
 package org.grouplens.lenskit.hello;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Throwables;
 import org.grouplens.lenskit.util.io.CompressionMode;
 import org.lenskit.LenskitConfiguration;
@@ -41,11 +45,16 @@ import org.lenskit.util.collections.LongUtils;
 import org.lenskit.LenskitRecommenderEngineLoader;
 
 import java.io.*;
+import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
 import com.google.common.base.Stopwatch;
+import java.util.Date;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 
 /**
  * Demonstration app for LensKit. This application builds an item-item CF model
@@ -55,6 +64,13 @@ import com.google.common.base.Stopwatch;
  */
 public class HelloLenskit implements Runnable{
     private static final Logger logger = LoggerFactory.getLogger(HelloLenskit.class);
+
+    /** used by logging to file code
+     * global and accessibel by other files
+     */
+    public static FileWriter writer = null;
+    public static BufferedWriter bufferedWriter = null;
+
 
     public static void main(String[] args) {
         if (args.length == 0)
@@ -71,12 +87,13 @@ public class HelloLenskit implements Runnable{
         }
         else System.err.println("Please select either Train or Test");
     }
-    private String mode;
-    private Path dataFile;
+    private static String mode;
+    private static Path dataFile;
     private static FileReader aptoide_config;
-    private List<Long> items;
-    private List<List<Long>> total_items = new ArrayList<List<Long>>();
-    private List<String> lines = new ArrayList<>();
+    public static List<Long> items;
+    public static List<List<Long>> total_items = new ArrayList<List<Long>>();
+    public static List<String> out_names = new ArrayList<>();
+    public static int out_names_index = 0;
     private static List<String> config_file = new ArrayList<>();
     private static final String cvsSplitBy = ",";
     private static final String newLine = "\n";
@@ -148,23 +165,67 @@ public class HelloLenskit implements Runnable{
         return config_file.get(2);
     }
 
-    public String getTestInputFile(){
+    public String getAppNameFile(){
         return config_file.get(3);
     }
 
-    public String getTestOutPutFile(){
+    public String getTestInputFile(){
         return config_file.get(4);
     }
 
-    public String getAmountRecs(){
+    public String getTestOutPutFile(){
         return config_file.get(5);
     }
 
-    public String getNumberThreads(){
-        return config_file.get(6);
+    public int getAmountRecs(){
+        return Integer.valueOf(config_file.get(6));
     }
 
+    public String getNumberThreads(){
+        return config_file.get(7);
+    }
+
+
     public void run() {
+
+        // =============== heap memory test ===============================
+        int mb = 1024*1024;
+        //Getting the runtime reference from system
+        Runtime runtime = Runtime.getRuntime();
+        System.out.println("=============================================================");
+        System.out.println("##### Heap utilization statistics [MB] - run() started #####");
+        System.out.println("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+        System.out.println("Free Memory:" + runtime.freeMemory() / mb);
+        System.out.println("Total Available Memory:" + runtime.totalMemory() / mb);
+        System.out.println("Max Available Memory:" + runtime.maxMemory() / mb);
+        System.out.println("=============================================================");
+        // ================================================================
+        // =============== log to file ====================================
+        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+        Date date = new Date();
+        try {
+            writer = new FileWriter("etc/BasketRun.log", true);
+            bufferedWriter = new BufferedWriter(writer);
+            bufferedWriter.write("=============================================================");
+            bufferedWriter.newLine();
+            bufferedWriter.write("##### Heap utilization statistics [MB] - run() started #####");
+            bufferedWriter.newLine();
+            bufferedWriter.write("Time: " + dateFormat.format(date));
+            bufferedWriter.newLine();
+            bufferedWriter.write("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+            bufferedWriter.newLine();
+            bufferedWriter.write("Free Memory:" + runtime.freeMemory() / mb);
+            bufferedWriter.newLine();
+            bufferedWriter.write("Total Available Memory:" + runtime.totalMemory() / mb);
+            bufferedWriter.newLine();
+            bufferedWriter.write("Max Available Memory:" + runtime.maxMemory() / mb);
+            bufferedWriter.newLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        // =================================================================
+
+
         // We first need to configure the data access.
         // We will load data from a static data source; you could implement your own DAO
         // on top of a database of some kind
@@ -215,6 +276,40 @@ public class HelloLenskit implements Runnable{
             } catch (Exception e) {
                 e.printStackTrace();
             }
+            // =============== heap memory test ===============================
+            //Getting the runtime reference from system
+            runtime = Runtime.getRuntime();
+            System.out.println("=============================================================");
+            System.out.println("##### Heap utilization statistics [MB] - Train Engine Completed #####");
+            System.out.println("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+            System.out.println("Free Memory:" + runtime.freeMemory() / mb);
+            System.out.println("Total Available Memory:" + runtime.totalMemory() / mb);
+            System.out.println("Max Available Memory:" + runtime.maxMemory() / mb);
+            System.out.println("=============================================================");
+            // ================================================================
+            // =============== log to file ====================================
+            date = new Date();
+            try{
+                bufferedWriter.write("=============================================================");
+                bufferedWriter.newLine();
+                bufferedWriter.write("##### Heap utilization statistics [MB] - Train Engine Completed #####");
+                bufferedWriter.newLine();
+                bufferedWriter.write("Time: " + dateFormat.format(date));
+                bufferedWriter.newLine();
+                bufferedWriter.write("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+                bufferedWriter.newLine();
+                bufferedWriter.write("Free Memory:" + runtime.freeMemory() / mb);
+                bufferedWriter.newLine();
+                bufferedWriter.write("Total Available Memory:" + runtime.totalMemory() / mb);
+                bufferedWriter.newLine();
+                bufferedWriter.write("Max Available Memory:" + runtime.maxMemory() / mb);
+                bufferedWriter.newLine();
+                bufferedWriter.close();
+                writer.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            // =================================================================
         } else if(mode.equals("Test")){
             converter();
             FileWriter fw = null;
@@ -252,9 +347,9 @@ public class HelloLenskit implements Runnable{
                     logger.info("Building {} Threads", n_threads);
                     for(int i = 0; i < n_threads; i++ ){
                         if (i < n_threads -1)
-                            Pool[i] = new Thread(new MyThread(total_items, items_by_thread * i, items_by_thread, getAmountRecs(), irec, dao, fw));
+                            Pool[i] = new Thread(new MyThread(items_by_thread * i, items_by_thread, getAmountRecs(), irec, dao, fw));
                         else
-                            Pool[i] = new Thread(new MyThread(total_items, items_by_thread * i, (total_items.size()-((n_threads-1)*items_by_thread)), getAmountRecs(), irec, dao, fw));
+                            Pool[i] = new Thread(new MyThread(items_by_thread * i, (total_items.size()-((n_threads-1)*items_by_thread)), getAmountRecs(), irec, dao, fw));
                         Pool[i].start();
                     }
                     logger.info("Threads Running");
@@ -309,6 +404,8 @@ public class HelloLenskit implements Runnable{
     // METHOD TO MAP THE NAMES RECEIVED IN TEST INPUT TO ID'
     // IN TIME CAN BE AVOIDED IF USING LENKSIT PROPERLY
     public void converter() {
+        Path appNameFile = Paths.get(getAppNameFile());
+
         List<String> names = new ArrayList<>();
         String AppNames = "data/myData/appName.csv";
         String input_file = getTestInputFile();
@@ -328,7 +425,7 @@ public class HelloLenskit implements Runnable{
         /////////////////////////////////////
 
         // PROCESSAR APPNAMES FILE PARA HASHMAP
-        File f = new File(AppNames);
+        File f = new File(appNameFile.toString());
         Scanner input = null;
         try {
             input = new Scanner(f);
@@ -355,6 +452,11 @@ public class HelloLenskit implements Runnable{
                 items.add(Long.valueOf(idCode.get(arg)));
                 total_items.add(items);
             }
+            else {
+                items.add(0L);
+                total_items.add(items);
+                out_names.add(arg);
+            }
         }
     }
 }
@@ -363,42 +465,50 @@ class MyThread extends Thread {
 
     private int index;
     private int thread_num;
-    private String AmountRecs;
+    private int AmountRecs;
     private ItemBasedItemRecommender irec;
     private DataAccessObject dao;
     private FileWriter fw;
-    private List<List<Long>> total_items;
+    //private List<List<Long>> total_items;
+    //private List<String> out_names;
 
-    public MyThread(List<List<Long>> total_items,int index, int thread_num, String AmountRecs, ItemBasedItemRecommender irec, DataAccessObject dao, FileWriter fw) {
+    public MyThread(int index, int thread_num, int AmountRecs, ItemBasedItemRecommender irec, DataAccessObject dao, FileWriter fw) {
         this.index = index;
         this.thread_num = thread_num;
         this.AmountRecs = AmountRecs;
         this.irec = irec;
         this.dao = dao;
         this.fw = fw;
-        this.total_items = total_items;
     }
 
     public void run() {
         String to_append="";
         for (int i = index; i < index + thread_num; i++) {
-            List<Long> used_items = total_items.get(i);
+            List<Long> used_items = HelloLenskit.total_items.get(i);
             Entity AppData = dao.lookupEntity(CommonTypes.ITEM, used_items.get(0));
             String AppName = null;
             if (AppData != null) {
                 AppName = AppData.maybeGet(CommonAttributes.NAME);
-            }
-            to_append = to_append + "\"" + AppName + "\"" + ",";
-            ResultList recs = irec.recommendRelatedItemsWithDetails(LongUtils.packedSet(used_items), Integer.valueOf(AmountRecs), null, null);
-            for (Result item : recs) {
-                Entity itemData = dao.lookupEntity(CommonTypes.ITEM, item.getId());
-                String name = null;
-                if (itemData != null) {
-                    name = itemData.maybeGet(CommonAttributes.NAME);
+                to_append = to_append + "\"" + AppName + "\"" + ",";
+                ResultList recs = irec.recommendRelatedItemsWithDetails(LongUtils.packedSet(used_items), AmountRecs, null, null);
+                int k = 0;
+                for (Result item : recs) {
+                    k++;
+                    Entity itemData = dao.lookupEntity(CommonTypes.ITEM, item.getId());
+                    String name = null;
+                    if (itemData != null) {
+                        name = itemData.maybeGet(CommonAttributes.NAME);
+                    }
+                    to_append = to_append + "(\"" + name + "\"" + "," + String.valueOf(item.getScore()) + ")";
+                    if (k < AmountRecs)
+                        to_append = to_append + ",";
                 }
-                to_append = to_append + "(\"" + name + "\"" + "," + String.valueOf(item.getScore()) + ")" + ",";
+                to_append = to_append + "\n";
             }
-            to_append = to_append + "\n";
+            else {
+                to_append = to_append + HelloLenskit.out_names.get(HelloLenskit.out_names_index) + "\n";
+                HelloLenskit.out_names_index++;
+            }
         }
         try {
             fw.append(to_append);
