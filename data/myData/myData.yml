@@ -1,0 +1,11 @@
+ratings:
+  file: exploded_4fields.csv
+  format: csv
+  header: false
+  entity_type: rating
+items:
+  file: appName.csv
+  format: csv
+  header: false
+  entity_type: item
+  columns: [id, name]
