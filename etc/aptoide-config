@@ -4,5 +4,6 @@ data/myData/myData.yml
 data/myData/appName.csv
 etc/test_input.txt
 etc/test_output.txt
+etc/BasketRun.log
 10
 4

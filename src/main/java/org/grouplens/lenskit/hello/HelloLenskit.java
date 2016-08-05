@@ -119,8 +119,9 @@ public class HelloLenskit implements Runnable{
     //  3 - Data file (.yml required);
     //  4 - Test input file;
     //  5 - Test output file;
-    //  6 - Number of recommendations needed per item;
-    //  7 - Number of Threads for testing;
+    //  6 - Log File;
+    //  7 - Number of recommendations needed per item;
+    //  8 - Number of Threads for testing;
 
     public static void readAptoideConfigFile(){
         String line = "";
@@ -157,13 +158,16 @@ public class HelloLenskit implements Runnable{
     public String getTestOutPutFile(){
         return config_file.get(5);
     }
+    public String getLogFile(){
+        return config_file.get(6);
+    }
 
     public int getAmountRecs(){
-        return Integer.valueOf(config_file.get(6));
+        return Integer.valueOf(config_file.get(7));
     }
 
     public String getNumberThreads(){
-        return config_file.get(7);
+        return config_file.get(8);
     }
 
 
@@ -185,7 +189,7 @@ public class HelloLenskit implements Runnable{
         DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
         Date date = new Date();
         try {
-            writer = new FileWriter("etc/BasketRun.log", true);
+            writer = new FileWriter(getLogFile(), true);
             bufferedWriter = new BufferedWriter(writer);
             bufferedWriter.write("=============================================================");
             bufferedWriter.newLine();
@@ -358,10 +362,8 @@ public class HelloLenskit implements Runnable{
     // METHOD TO MAP THE NAMES RECEIVED IN TEST INPUT TO ID'
     // IN TIME CAN BE AVOIDED IF USING LENKSIT PROPERLY
     public void converter() {
-        Path appNameFile = Paths.get(getAppNameFile());
-
         List<String> names = new ArrayList<>();
-        String AppNames = "data/myData/appName.csv";
+        String AppNames = getAppNameFile();
         String input_file = getTestInputFile();
         String line = "";
 
@@ -379,7 +381,7 @@ public class HelloLenskit implements Runnable{
         /////////////////////////////////////
 
         // PROCESSAR APPNAMES FILE PARA HASHMAP
-        File f = new File(appNameFile.toString());
+        File f = new File(AppNames);
         Scanner input = null;
         try {
             input = new Scanner(f);
