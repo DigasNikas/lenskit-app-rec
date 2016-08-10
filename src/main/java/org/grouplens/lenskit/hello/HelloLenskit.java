@@ -96,7 +96,6 @@ public class HelloLenskit implements Runnable{
     public static int out_names_index = 0;
     private static List<String> config_file = new ArrayList<>();
     private static final String cvsSplitBy = ",";
-    private static final String newLine = "\n";
 
     public HelloLenskit(String ModeInput, String ConfigInput) {
         mode = ModeInput;
@@ -425,6 +424,8 @@ class MyThread extends Thread {
     private ItemBasedItemRecommender irec;
     private DataAccessObject dao;
     private FileWriter fw;
+    private final Object lockif = new Object();
+    private final Object lockelse = new Object();
     //private List<List<Long>> total_items;
     //private List<String> out_names;
 
@@ -444,26 +445,30 @@ class MyThread extends Thread {
             Entity AppData = dao.lookupEntity(CommonTypes.ITEM, used_items.get(0));
             String AppName = null;
             if (AppData != null) {
-                AppName = AppData.maybeGet(CommonAttributes.NAME);
-                to_append = to_append + "\"" + AppName + "\"" + ",";
                 ResultList recs = irec.recommendRelatedItemsWithDetails(LongUtils.packedSet(used_items), AmountRecs, null, null);
-                int k = 0;
-                for (Result item : recs) {
-                    k++;
-                    Entity itemData = dao.lookupEntity(CommonTypes.ITEM, item.getId());
-                    String name = null;
-                    if (itemData != null) {
-                        name = itemData.maybeGet(CommonAttributes.NAME);
+                synchronized (lockif) {
+                    AppName = AppData.maybeGet(CommonAttributes.NAME);
+                    to_append = to_append + "\"" + AppName + "\"" + ",";
+                    int k = 0;
+                    for (Result item : recs) {
+                        k++;
+                        Entity itemData = dao.lookupEntity(CommonTypes.ITEM, item.getId());
+                        String name = null;
+                        if (itemData != null) {
+                            name = itemData.maybeGet(CommonAttributes.NAME);
+                        }
+                        to_append = to_append + "(\"" + name + "\"" + "," + String.valueOf(item.getScore()) + ")";
+                        if (k < AmountRecs)
+                            to_append = to_append + ",";
                     }
-                    to_append = to_append + "(\"" + name + "\"" + "," + String.valueOf(item.getScore()) + ")";
-                    if (k < AmountRecs)
-                        to_append = to_append + ",";
+                    to_append = to_append + "\n";
                 }
-                to_append = to_append + "\n";
             }
             else {
-                to_append = to_append + HelloLenskit.out_names.get(HelloLenskit.out_names_index) + "\n";
-                HelloLenskit.out_names_index++;
+                synchronized (lockelse) {
+                    to_append = to_append + HelloLenskit.out_names.get(HelloLenskit.out_names_index) + "\n";
+                    HelloLenskit.out_names_index++;
+                }
             }
         }
         try {
