@@ -7,8 +7,10 @@
   </appender>
 
   <logger name="org.grouplens.grapht" level="${grapht.log.level:-WARN}"/>
+  <logger name="deng" level="DEBUG"/>
+  <logger name="trace" level="TRACE"/>
 
-  <root level="${log.level:-INFO}">
+  <root level="trace">
     <appender-ref ref="STDERR" />
   </root>
 </configuration>
