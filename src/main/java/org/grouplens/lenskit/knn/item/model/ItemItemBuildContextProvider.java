@@ -42,6 +42,10 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 
 /**
  * Provider that sets up an {@link ItemItemBuildContext}.
@@ -100,7 +104,38 @@ public class ItemItemBuildContextProvider implements Provider<ItemItemBuildConte
         }
 
         logger.debug("item data completed");
-        return new ItemItemBuildContext(items, itemRatings, userItems);
+        FileOutputStream f_out = null;
+        try {
+            f_out = new FileOutputStream("initial_model.data");
+        }
+        catch(FileNotFoundException e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        ObjectOutputStream obj_out = null;
+        try {
+            obj_out = new ObjectOutputStream (f_out);
+        }
+        catch(IOException e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+
+        ItemItemBuildContext object = new ItemItemBuildContext(items, itemRatings, userItems);
+
+        try {
+            obj_out.writeObject(object);
+        }
+        catch (IOException e){
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        //return new ItemItemBuildContext(items, itemRatings, userItems);
+        object = new ItemItemBuildContext(null,null,null);
+        return object;
     }
 
     /**

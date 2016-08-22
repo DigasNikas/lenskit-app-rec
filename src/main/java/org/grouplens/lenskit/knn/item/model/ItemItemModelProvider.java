@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.inject.Inject;
 import javax.inject.Provider;
+import java.io.*;
 
 /**
  * Build an item-item CF model from rating data.
@@ -52,7 +53,7 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
     private static final Logger logger = LoggerFactory.getLogger(ItemItemModelProvider.class);
 
     private final ItemSimilarity itemSimilarity;
-    private final ItemItemBuildContext buildContext;
+    private ItemItemBuildContext buildContext;
     private final Threshold threshold;
     private final NeighborIterationStrategy neighborStrategy;
     private final int minCommonUsers;
@@ -67,6 +68,27 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                                  @ModelSize int size) {
         itemSimilarity = similarity;
         buildContext = context;
+        try {
+            InputStream fis = new FileInputStream("initial_model.data");
+            InputStream buffer = new BufferedInputStream(fis);
+            ObjectInputStream ois = new ObjectInputStream (buffer);
+            buildContext = (ItemItemBuildContext) ois.readObject();
+        }
+        catch(FileNotFoundException e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        catch(IOException e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        catch(ClassNotFoundException e){
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
         threshold = thresh;
         neighborStrategy = nbrStrat;
         minCommonUsers = minCU;
@@ -96,6 +118,23 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                                                 .start();
         int ndone = 0;
         int npairs = 0;
+        ObjectOutputStream obj_out = null;
+        try {
+            OutputStream f_out = new FileOutputStream("myobject.data");
+            OutputStream buffer = new BufferedOutputStream(f_out);
+            obj_out = new ObjectOutputStream (buffer);
+        }
+        catch(FileNotFoundException e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        catch(IOException e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+
         OUTER: while (outer.hasNext()) {
             ndone += 1;
             final long itemId1 = outer.nextLong();
@@ -137,7 +176,14 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                     }
                 }
             }
-
+            try {
+                obj_out.writeObject(row);
+            }
+            catch (IOException e){
+                System.err.println(e.toString());
+                e.printStackTrace(System.err);
+                System.exit(1);
+            }
             progress.advance();
         }
         progress.finish();
