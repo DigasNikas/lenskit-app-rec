@@ -74,17 +74,7 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             ObjectInputStream ois = new ObjectInputStream (buffer);
             buildContext = (ItemItemBuildContext) ois.readObject();
         }
-        catch(FileNotFoundException e) {
-            System.err.println(e.toString());
-            e.printStackTrace(System.err);
-            System.exit(1);
-        }
-        catch(IOException e) {
-            System.err.println(e.toString());
-            e.printStackTrace(System.err);
-            System.exit(1);
-        }
-        catch(ClassNotFoundException e){
+        catch(Exception e) {
             System.err.println(e.toString());
             e.printStackTrace(System.err);
             System.exit(1);
@@ -124,12 +114,7 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             OutputStream buffer = new BufferedOutputStream(f_out);
             obj_out = new ObjectOutputStream (buffer);
         }
-        catch(FileNotFoundException e) {
-            System.err.println(e.toString());
-            e.printStackTrace(System.err);
-            System.exit(1);
-        }
-        catch(IOException e) {
+        catch(Exception e) {
             System.err.println(e.toString());
             e.printStackTrace(System.err);
             System.exit(1);
@@ -155,7 +140,7 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             LongIterator itemIter = neighborStrategy.neighborIterator(buildContext, itemId1,
                                                                       itemSimilarity.isSymmetric());
 
-            ScoredIdAccumulator row = rows.get(itemId1);
+            //ScoredIdAccumulator row = rows.get(itemId1);
             INNER: while (itemIter.hasNext()) {
                 long itemId2 = itemIter.nextLong();
                 if (itemId1 != itemId2) {
@@ -167,7 +152,7 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
 
                     double sim = itemSimilarity.similarity(itemId1, vec1, itemId2, vec2);
                     if (threshold.retain(sim)) {
-                        row.put(itemId2, sim);
+                        //row.put(itemId2, sim);
                         npairs += 1;
                         if (itemSimilarity.isSymmetric()) {
                             rows.get(itemId2).put(itemId1, sim);
@@ -176,14 +161,14 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                     }
                 }
             }
-            try {
-                obj_out.writeObject(row);
+            /*try {
+                obj_out.writeObject(rows);
             }
             catch (IOException e){
                 System.err.println(e.toString());
                 e.printStackTrace(System.err);
                 System.exit(1);
-            }
+            }*/
             progress.advance();
         }
         progress.finish();
