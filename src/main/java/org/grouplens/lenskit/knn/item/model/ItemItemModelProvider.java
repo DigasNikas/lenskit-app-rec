@@ -40,6 +40,9 @@ import javax.annotation.concurrent.NotThreadSafe;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import java.io.*;
+import java.util.Properties;
+import java.util.Scanner;
+import java.util.StringTokenizer;
 
 /**
  * Build an item-item CF model from rating data.
@@ -67,18 +70,7 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                                  @MinCommonUsers int minCU,
                                  @ModelSize int size) {
         itemSimilarity = similarity;
-        buildContext = context;
-        try {
-            InputStream fis = new FileInputStream("initial_model.data");
-            InputStream buffer = new BufferedInputStream(fis);
-            ObjectInputStream ois = new ObjectInputStream (buffer);
-            buildContext = (ItemItemBuildContext) ois.readObject();
-        }
-        catch(Exception e) {
-            System.err.println(e.toString());
-            e.printStackTrace(System.err);
-            System.exit(1);
-        }
+        buildContext = getContext();
         threshold = thresh;
         neighborStrategy = nbrStrat;
         minCommonUsers = minCU;
@@ -87,19 +79,25 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
 
     @Override
     public SimilarityMatrixModel get() {
-        logger.info("building item-item model for {} items", buildContext.getItems().size());
+        LongSortedSet allItems = buildContext.getItems();
+        final int nitems = allItems.size();
+        LongIterator outer = allItems.iterator();
+
+        logger.info("building item-item model for {} items", nitems);
         logger.debug("using similarity function {}", itemSimilarity);
         logger.debug("similarity function is {}",
                      itemSimilarity.isSparse() ? "sparse" : "non-sparse");
         logger.debug("similarity function is {}",
                      itemSimilarity.isSymmetric() ? "symmetric" : "non-symmetric");
 
-        LongSortedSet allItems = buildContext.getItems();
-
-        Long2ObjectMap<ScoredIdAccumulator> rows = makeAccumulators(allItems);
-
-        final int nitems = allItems.size();
-        LongIterator outer = allItems.iterator();
+        //Long2ObjectMap<ScoredIdAccumulator> rows = makeAccumulators(allItems);
+        //writeRows(rows);
+        PrintWriter pw = null;
+        try {
+            File fileTwo = new File("similarities.csv");
+            FileOutputStream fos = new FileOutputStream(fileTwo);
+            pw = new PrintWriter(fos);
+        }catch(Exception e){}
 
         ProgressLogger progress = ProgressLogger.create(logger)
                                                 .setCount(nitems)
@@ -108,17 +106,6 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                                                 .start();
         int ndone = 0;
         int npairs = 0;
-        ObjectOutputStream obj_out = null;
-        try {
-            OutputStream f_out = new FileOutputStream("myobject.data");
-            OutputStream buffer = new BufferedOutputStream(f_out);
-            obj_out = new ObjectOutputStream (buffer);
-        }
-        catch(Exception e) {
-            System.err.println(e.toString());
-            e.printStackTrace(System.err);
-            System.exit(1);
-        }
 
         OUTER: while (outer.hasNext()) {
             ndone += 1;
@@ -155,27 +142,40 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                         //row.put(itemId2, sim);
                         npairs += 1;
                         if (itemSimilarity.isSymmetric()) {
-                            rows.get(itemId2).put(itemId1, sim);
+                            //rows.get(itemId2).put(itemId1, sim);
+                            try{
+                                pw.println(itemId2+","+itemId1+","+sim);
+                                pw.flush();
+                            }catch(Exception e){}
                             npairs += 1;
                         }
                     }
                 }
             }
+            //writeRows(rows);
             /*try {
                 obj_out.writeObject(rows);
+                obj_out.flush();
             }
-            catch (IOException e){
+            catch(Exception e) {
                 System.err.println(e.toString());
                 e.printStackTrace(System.err);
                 System.exit(1);
             }*/
             progress.advance();
         }
+        pw.close();
         progress.finish();
-        logger.info("built model of {} similarities for {} items in {}",
-                    npairs, ndone, progress.elapsedTime());
 
+        buildContext = null;
+
+        logger.info("Building Object from similarities.csv");
+        Long2ObjectMap<ScoredIdAccumulator> rows = buildRows(allItems);
+
+        logger.info("built model of {} similarities for {} items in {}",
+                npairs, ndone, progress.elapsedTime());
         return new SimilarityMatrixModel(finishRows(rows));
+
     }
 
     private Long2ObjectMap<ScoredIdAccumulator> makeAccumulators(LongSet items) {
@@ -200,5 +200,74 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             results.put(e.getLongKey(), e.getValue().finishMap());
         }
         return results;
+    }
+
+    private ItemItemBuildContext getContext(){
+        ItemItemBuildContext buildContext = null;
+        try {
+            InputStream fis = new FileInputStream("initial_model.data");
+            InputStream buffer = new BufferedInputStream(fis);
+            ObjectInputStream ois = new ObjectInputStream (buffer);
+            buildContext = (ItemItemBuildContext) ois.readObject();
+            ois.close();
+            fis.close();
+        }
+        catch(Exception e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        return buildContext;
+    }
+    private Long2ObjectMap<ScoredIdAccumulator> buildRows(LongSortedSet allItems){
+        Long2ObjectMap<ScoredIdAccumulator> rows = makeAccumulators(allItems);
+        try {
+            File toRead = new File("similarities.csv");
+            FileInputStream fis = new FileInputStream(toRead);
+
+            Scanner sc = new Scanner(fis);
+
+            String currentLine;
+            while(sc.hasNextLine()){
+                currentLine=sc.nextLine();
+                StringTokenizer st=new StringTokenizer(currentLine,",",false);
+                rows.get(Long.valueOf(st.nextToken())).put(Long.valueOf(st.nextToken()), Double.valueOf(st.nextToken()));
+            }
+            fis.close();
+        }
+        catch(Exception e){}
+        return rows;
+    }
+    private Long2ObjectMap<ScoredIdAccumulator> getRows(){
+        Long2ObjectMap<ScoredIdAccumulator> rows = null;
+        try {
+            InputStream fis = new FileInputStream("myobject.data");
+            InputStream buffer = new BufferedInputStream(fis);
+            ObjectInputStream ois = new ObjectInputStream (buffer);
+            rows = (Long2ObjectMap<ScoredIdAccumulator>) ois.readObject();
+            ois.close();
+            fis.close();
+        }
+        catch(Exception e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        return rows;
+    }
+    private void writeRows(Long2ObjectMap<ScoredIdAccumulator> rows){
+        try {
+            OutputStream f_out = new FileOutputStream("myobject.data");
+            OutputStream buffer = new BufferedOutputStream(f_out);
+            ObjectOutputStream obj_out = new ObjectOutputStream (buffer);
+            obj_out.writeObject(rows);
+            obj_out.close();
+            f_out.close();
+        }
+        catch(Exception e) {
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
     }
 }

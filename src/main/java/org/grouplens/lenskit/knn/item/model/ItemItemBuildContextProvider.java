@@ -110,6 +110,7 @@ public class ItemItemBuildContextProvider implements Provider<ItemItemBuildConte
             FileOutputStream f_out = new FileOutputStream("initial_model.data");
             ObjectOutputStream obj_out = new ObjectOutputStream (f_out);
             obj_out.writeObject(object);
+            obj_out.close();
         }
         catch(Exception e) {
             System.err.println(e.toString());
