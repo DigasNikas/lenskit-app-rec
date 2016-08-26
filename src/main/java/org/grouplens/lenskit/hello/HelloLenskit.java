@@ -85,9 +85,6 @@ public class HelloLenskit implements Runnable{
         else System.err.println("Please select either Train or Test");
     }
 
-    private FileWriter writer = null;
-    private BufferedWriter bufferedWriter = null;
-
     private String mode;
     private Path dataFile;
     public List<Long> items;
@@ -233,7 +230,7 @@ public class HelloLenskit implements Runnable{
         }
         else if (mode.equals("Test")){
             converter();
-            FileWriter fw = null;
+            BufferedWriter bufferedWriter = null;
             File modelFile = new File(getModelFile());
             Stopwatch timerX;
             LenskitRecommenderEngineLoader loader;
@@ -247,7 +244,8 @@ public class HelloLenskit implements Runnable{
                 logger.info("loading recommender from {}", modelFile);
                 timerX.stop();
                 logger.info("loaded recommender engine in {}", timerX);
-                fw = new FileWriter(getTestOutPutFile());
+                FileWriter fw = new FileWriter(getTestOutPutFile());
+                bufferedWriter = new BufferedWriter(fw);
                 // Finally, get the recommender and use it.
                 try (LenskitRecommender rec = engine.createRecommender(dao)) {
                     logger.info("obtained recommender from engine");
@@ -270,11 +268,11 @@ public class HelloLenskit implements Runnable{
                         int thread_items = items_by_thread * i;
                         if (i < n_threads -1)
                             Pool[i] = new Thread(new MyThread(thread_items, items_by_thread, getAmountRecs(),
-                                    total_items, out_names, irec, dao, fw));
+                                    total_items, out_names, irec, dao, bufferedWriter));
                         else {
                             int items_by_thread_x = (total_items.size() - ((n_threads - 1) * items_by_thread));
                             Pool[i] = new Thread(new MyThread(thread_items, items_by_thread_x, getAmountRecs(),
-                                    total_items, out_names, irec, dao, fw));
+                                    total_items, out_names, irec, dao, bufferedWriter));
                         }
                         Pool[i].start();
                     }
@@ -291,8 +289,8 @@ public class HelloLenskit implements Runnable{
                 e.printStackTrace();
             } finally {
                 try {
-                    fw.flush();
-                    fw.close();
+                    bufferedWriter.flush();
+                    bufferedWriter.close();
                 } catch (IOException e) {
                     System.out.println("Error while flushing/closing fileWriter !!!");
                     e.printStackTrace();
@@ -366,6 +364,8 @@ public class HelloLenskit implements Runnable{
         Runtime runtime = Runtime.getRuntime();
         DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
         Date date = new Date();
+        FileWriter writer;
+        BufferedWriter bufferedWriter;
         System.out.println("=============================================================");
         if (i == 1)
             System.out.println("##### Heap utilization statistics [MB] - run() started #####");
@@ -420,14 +420,14 @@ class MyThread extends Thread {
     private static volatile DataAccessObject dao;
     private static volatile List<List<Long>> total_items;
     private static volatile List<String> out_names;
-    private FileWriter fw;
+    private BufferedWriter bufferedWriter;
     private final Object lock_if = new Object();
     private final Object lock_else = new Object();
     private final Object lock_writer = new Object();
 
     public MyThread(int Index, int Thread_num, int amountRecs,
                     List<List<Long>> Total_items, List<String> Out_names,
-                    ItemBasedItemRecommender Irec, DataAccessObject Dao, FileWriter Fw) {
+                    ItemBasedItemRecommender Irec, DataAccessObject Dao, BufferedWriter BufferedWriter) {
         index = Index;
         thread_num = Thread_num;
         AmountRecs = amountRecs;
@@ -435,7 +435,7 @@ class MyThread extends Thread {
         out_names = Out_names;
         irec = Irec;
         dao = Dao;
-        fw = Fw;
+        bufferedWriter= BufferedWriter;
     }
 
     public void run() {
@@ -473,7 +473,7 @@ class MyThread extends Thread {
         }
         try {
             synchronized (lock_writer) {
-                fw.append(to_append);
+                bufferedWriter.write(to_append);
             }
         } catch (Exception e) {
             e.printStackTrace();

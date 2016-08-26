@@ -61,8 +61,8 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
     private final NeighborIterationStrategy neighborStrategy;
     private final int minCommonUsers;
     private final int modelSize;
-    private PrintWriter pw;
-    private ProgressLogger progress;
+    //private BufferedWriter bufferedWriter;
+    //private ProgressLogger progress;
 
     @Inject
     public ItemItemModelProvider(@Transient ItemSimilarity similarity,
@@ -91,20 +91,25 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
         logger.debug("similarity function is {}",
                      itemSimilarity.isSymmetric() ? "symmetric" : "non-symmetric");
 
-        pw = null;
+        BufferedWriter bufferedWriter = null;
         try {
             File fileTwo = new File("similarities.tmp");
             FileOutputStream fos = new FileOutputStream(fileTwo);
-            pw = new PrintWriter(fos);
-        }catch(Exception e){}
+            PrintWriter pw = new PrintWriter(fos);
+            bufferedWriter = new BufferedWriter(pw);
+        }catch(Exception e){
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
 
-        progress = ProgressLogger.create(logger)
+        ProgressLogger progress = ProgressLogger.create(logger)
                 .setCount(nitems)
                 .setLabel("item-item model build")
                 .setWindow(50)
                 .start();
 
-        int n_threads = Integer.parseInt("16");
+        int n_threads = Runtime.getRuntime().availableProcessors();
         Thread Pool[] = new Thread[n_threads];
         int items_by_thread = nitems/n_threads;
 
@@ -114,13 +119,13 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             int items = i*items_by_thread;
             if (i < n_threads -1) {
                 LongIterator outer = allItems.subSet(items, items + items_by_thread).iterator();
-                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, pw, buildContext,
+                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, bufferedWriter, buildContext,
                         threshold, neighborStrategy, minCommonUsers, progress));
             }
             else {
                 int k = (nitems - ((n_threads - 1) * items_by_thread));
                 LongIterator outer = allItems.subSet(items, items + k).iterator();
-                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, pw, buildContext,
+                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, bufferedWriter, buildContext,
                         threshold,neighborStrategy,minCommonUsers, progress));
             }
             Pool[i].start();
@@ -136,18 +141,17 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             for (int j = 0; j < n_threads; j++) {
                 Pool[j]=null;
             }
+            bufferedWriter.close();
         }catch (Exception e){
             e.printStackTrace();
         }
         timer.stop();
         logger.info("Thread computation done in {}", timer);
 
-        pw.close();
         progress.finish();
 
+        //Get rid of builContext to save memory
         buildContext = null;
-        pw = null;
-        progress = null;
 
         logger.info("Building Object from similarities.csv");
         Stopwatch timerX;
@@ -216,7 +220,11 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             }
             fis.close();
         }
-        catch(Exception e){}
+        catch(Exception e){
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
         return rows;
     }
 }
@@ -224,19 +232,19 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
 class MyThread extends Thread {
     private static volatile ItemSimilarity itemSimilarity;
     private final LongIterator outer;
-    private PrintWriter pw;
+    private BufferedWriter bufferedWriter;
     private static volatile ItemItemBuildContext buildContext;
     private static volatile Threshold threshold;
     private static volatile NeighborIterationStrategy neighborStrategy;
     private static volatile int minCommonUsers;
     private static volatile ProgressLogger progress;
 
-    public MyThread(LongIterator Outer, ItemSimilarity Similarity, PrintWriter Pw,
+    public MyThread(LongIterator Outer, ItemSimilarity Similarity, BufferedWriter BufferedWriter,
                     ItemItemBuildContext BuildContext, Threshold Threshold, NeighborIterationStrategy NeighborStrategy,
                     int MinCommonUsers, ProgressLogger Progress){
         outer = Outer;
         itemSimilarity = Similarity;
-        pw = Pw;
+        bufferedWriter = BufferedWriter;
         buildContext = BuildContext;
         threshold = Threshold;
         neighborStrategy = NeighborStrategy;
@@ -273,9 +281,12 @@ class MyThread extends Thread {
                     if (threshold.retain(sim)) {
                         if (itemSimilarity.isSymmetric()) {
                             try {
-                                pw.println(itemId2 + "," + itemId1 + "," + sim);
-                                pw.flush();
-                            } catch (Exception e) {}
+                                bufferedWriter.write(itemId2 + "," + itemId1 + "," + sim+"\n");
+                            } catch (Exception e) {
+                                System.err.println(e.toString());
+                                e.printStackTrace(System.err);
+                                System.exit(1);
+                            }
                         }
                     }
                 }
