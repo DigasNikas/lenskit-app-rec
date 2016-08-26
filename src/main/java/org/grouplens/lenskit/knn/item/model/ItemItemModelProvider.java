@@ -20,6 +20,7 @@
  */
 package org.lenskit.knn.item.model;
 
+import com.google.common.base.Stopwatch;
 import it.unimi.dsi.fastutil.longs.*;
 import org.grouplens.lenskit.transform.threshold.Threshold;
 import org.lenskit.util.ScoredIdAccumulator;
@@ -55,11 +56,13 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
     private static final Logger logger = LoggerFactory.getLogger(ItemItemModelProvider.class);
 
     private final ItemSimilarity itemSimilarity;
-    private ItemItemBuildContext buildContext;
+    private static ItemItemBuildContext buildContext;
     private final Threshold threshold;
     private final NeighborIterationStrategy neighborStrategy;
     private final int minCommonUsers;
     private final int modelSize;
+    private PrintWriter pw;
+    private ProgressLogger progress;
 
     @Inject
     public ItemItemModelProvider(@Transient ItemSimilarity similarity,
@@ -80,7 +83,6 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
     public SimilarityMatrixModel get() {
         LongSortedSet allItems = buildContext.getItems();
         final int nitems = allItems.size();
-        LongIterator outer = allItems.iterator();
 
         logger.info("building item-item model for {} items", nitems);
         logger.debug("using similarity function {}", itemSimilarity);
@@ -89,75 +91,71 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
         logger.debug("similarity function is {}",
                      itemSimilarity.isSymmetric() ? "symmetric" : "non-symmetric");
 
-        PrintWriter pw = null;
+        pw = null;
         try {
-            File fileTwo = new File("similarities.csv");
+            File fileTwo = new File("similarities.tmp");
             FileOutputStream fos = new FileOutputStream(fileTwo);
             pw = new PrintWriter(fos);
         }catch(Exception e){}
 
-        ProgressLogger progress = ProgressLogger.create(logger)
-                                                .setCount(nitems)
-                                                .setLabel("item-item model build")
-                                                .setWindow(50)
-                                                .start();
-        int ndone = 0;
-        int npairs = 0;
+        progress = ProgressLogger.create(logger)
+                .setCount(nitems)
+                .setLabel("item-item model build")
+                .setWindow(50)
+                .start();
 
-        OUTER: while (outer.hasNext()) {
-            ndone += 1;
-            final long itemId1 = outer.nextLong();
-            if (logger.isTraceEnabled()) {
-                logger.trace("computing similarities for item {} ({} of {})",
-                             itemId1, ndone, nitems);
+        int n_threads = Integer.parseInt("16");
+        Thread Pool[] = new Thread[n_threads];
+        int items_by_thread = nitems/n_threads;
+
+        logger.info("Building {} Threads", n_threads);
+        for(int i = 0; i < n_threads; i++ ){
+
+            int items = i*items_by_thread;
+            if (i < n_threads -1) {
+                LongIterator outer = allItems.subSet(items, items + items_by_thread).iterator();
+                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, pw, buildContext,
+                        threshold, neighborStrategy, minCommonUsers, progress));
             }
-            SparseVector vec1 = buildContext.itemVector(itemId1);
-            if (vec1.size() < minCommonUsers) {
-                // if it doesn't have enough users, it can't have enough common users
-                if (logger.isTraceEnabled()) {
-                    logger.trace("item {} has {} (< {}) users, skipping", itemId1, vec1.size(), minCommonUsers);
-                }
-                progress.advance();
-                continue OUTER;
+            else {
+                int k = (nitems - ((n_threads - 1) * items_by_thread));
+                LongIterator outer = allItems.subSet(items, items + k).iterator();
+                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, pw, buildContext,
+                        threshold,neighborStrategy,minCommonUsers, progress));
             }
+            Pool[i].start();
 
-            LongIterator itemIter = neighborStrategy.neighborIterator(buildContext, itemId1,
-                                                                      itemSimilarity.isSymmetric());
-
-            INNER: while (itemIter.hasNext()) {
-                long itemId2 = itemIter.nextLong();
-                if (itemId1 != itemId2) {
-                    SparseVector vec2 = buildContext.itemVector(itemId2);
-                    if (!LongUtils.hasNCommonItems(vec1.keySet(), vec2.keySet(), minCommonUsers)) {
-                        // items have insufficient users in common, skip them
-                        continue INNER;
-                    }
-
-                    double sim = itemSimilarity.similarity(itemId1, vec1, itemId2, vec2);
-                    if (threshold.retain(sim)) {
-                        npairs += 1;
-                        if (itemSimilarity.isSymmetric()) {
-                            try{
-                                pw.println(itemId2+","+itemId1+","+sim);
-                                pw.flush();
-                            }catch(Exception e){}
-                            npairs += 1;
-                        }
-                    }
-                }
-            }
-            progress.advance();
         }
+        logger.info("Threads Running");
+        Stopwatch timer;
+        timer = Stopwatch.createStarted();
+        try {
+            for (int j = 0; j < n_threads; j++) {
+                Pool[j].join();
+            }
+            for (int j = 0; j < n_threads; j++) {
+                Pool[j]=null;
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        timer.stop();
+        logger.info("Thread computation done in {}", timer);
+
         pw.close();
         progress.finish();
 
         buildContext = null;
+        pw = null;
+        progress = null;
 
         logger.info("Building Object from similarities.csv");
+        Stopwatch timerX;
+        timerX = Stopwatch.createStarted();
         Long2ObjectMap<ScoredIdAccumulator> rows = buildRows(allItems);
+        timerX.stop();
 
-        logger.info("built model of {} similarities for {} items in {}",
-                npairs, ndone, progress.elapsedTime());
+        logger.info("built object in {}",timerX);
         return new SimilarityMatrixModel(finishRows(rows));
     }
 
@@ -205,7 +203,7 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
     private Long2ObjectMap<ScoredIdAccumulator> buildRows(LongSortedSet allItems){
         Long2ObjectMap<ScoredIdAccumulator> rows = makeAccumulators(allItems);
         try {
-            File toRead = new File("similarities.csv");
+            File toRead = new File("similarities.tmp");
             FileInputStream fis = new FileInputStream(toRead);
 
             Scanner sc = new Scanner(fis);
@@ -220,5 +218,69 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
         }
         catch(Exception e){}
         return rows;
+    }
+}
+
+class MyThread extends Thread {
+    private static volatile ItemSimilarity itemSimilarity;
+    private final LongIterator outer;
+    private PrintWriter pw;
+    private static volatile ItemItemBuildContext buildContext;
+    private static volatile Threshold threshold;
+    private static volatile NeighborIterationStrategy neighborStrategy;
+    private static volatile int minCommonUsers;
+    private static volatile ProgressLogger progress;
+
+    public MyThread(LongIterator Outer, ItemSimilarity Similarity, PrintWriter Pw,
+                    ItemItemBuildContext BuildContext, Threshold Threshold, NeighborIterationStrategy NeighborStrategy,
+                    int MinCommonUsers, ProgressLogger Progress){
+        outer = Outer;
+        itemSimilarity = Similarity;
+        pw = Pw;
+        buildContext = BuildContext;
+        threshold = Threshold;
+        neighborStrategy = NeighborStrategy;
+        minCommonUsers = MinCommonUsers;
+        progress = Progress;
+    }
+
+    public void run() {
+        OUTER:
+        while (outer.hasNext()) {
+            final long itemId1 = outer.nextLong();
+            //System.out.println(itemId1);
+            SparseVector vec1 = buildContext.itemVector(itemId1);
+            if (vec1.size() < minCommonUsers) {
+                // if it doesn't have enough users, it can't have enough common users
+                progress.advance();
+                continue OUTER;
+            }
+
+            LongIterator itemIter = neighborStrategy.neighborIterator(buildContext, itemId1,
+                    itemSimilarity.isSymmetric());
+
+            INNER:
+            while (itemIter.hasNext()) {
+                long itemId2 = itemIter.nextLong();
+                if (itemId1 != itemId2) {
+                    SparseVector vec2 = buildContext.itemVector(itemId2);
+                    if (!LongUtils.hasNCommonItems(vec1.keySet(), vec2.keySet(), minCommonUsers)) {
+                        // items have insufficient users in common, skip them
+                        continue INNER;
+                    }
+
+                    double sim = itemSimilarity.similarity(itemId1, vec1, itemId2, vec2);
+                    if (threshold.retain(sim)) {
+                        if (itemSimilarity.isSymmetric()) {
+                            try {
+                                pw.println(itemId2 + "," + itemId1 + "," + sim);
+                                pw.flush();
+                            } catch (Exception e) {}
+                        }
+                    }
+                }
+            }
+            progress.advance();
+        }
     }
 }

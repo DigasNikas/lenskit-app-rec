@@ -85,30 +85,22 @@ public class HelloLenskit implements Runnable{
         else System.err.println("Please select either Train or Test");
     }
 
-    private static FileWriter writer = null;
-    private static BufferedWriter bufferedWriter = null;
+    private FileWriter writer = null;
+    private BufferedWriter bufferedWriter = null;
 
-    private static String mode;
-    private static Path dataFile;
-    private static FileReader aptoide_config;
-    public static List<Long> items;
-    public static List<List<Long>> total_items = new ArrayList<List<Long>>();
-    public static List<String> out_names = new ArrayList<>();
-    public static int out_names_index = 0;
-    private static List<String> config_file = new ArrayList<>();
-    private static final String cvsSplitBy = ",";
+    private String mode;
+    private Path dataFile;
+    public List<Long> items;
+    private static List<List<Long>> total_items = new ArrayList<List<Long>>();
+    private static List<String> out_names = new ArrayList<>();
+    public static volatile int out_names_index = 0;
+    private List<String> config_file = new ArrayList<>();
+    private final String cvsSplitBy = ",";
 
     public HelloLenskit(String ModeInput, String ConfigInput) {
         mode = ModeInput;
-        try {
-            aptoide_config = new FileReader(ConfigInput);
-        } catch (IOException e) {
-            System.err.println("Please insert a valid Aptoide Config File");
-            e.printStackTrace();
-            System.exit(1);
-        }
         logger.info("reading aptoide config file");
-        readAptoideConfigFile();
+        config_file = readAptoideConfigFile(ConfigInput);
         dataFile = Paths.get(getDataFile());
     }
 
@@ -123,8 +115,17 @@ public class HelloLenskit implements Runnable{
     //  7 - Number of recommendations needed per item;
     //  8 - Number of Threads for testing;
 
-    public static void readAptoideConfigFile(){
+    public static List<String> readAptoideConfigFile(String ConfigInput){
         String line = "";
+        List<String> config_file = new ArrayList<>();
+        FileReader aptoide_config = null;
+        try {
+            aptoide_config = new FileReader(ConfigInput);
+        } catch (IOException e) {
+            System.err.println("Please insert a valid Aptoide Config File");
+            e.printStackTrace();
+            System.exit(1);
+        }
         try (BufferedReader br = new BufferedReader(aptoide_config)) {
             while ((line = br.readLine()) != null) {
                 config_file.add(line);
@@ -133,6 +134,7 @@ public class HelloLenskit implements Runnable{
             e.printStackTrace();
             System.exit(1);
         }
+        return config_file;
     }
 
     public String getModelFile(){
@@ -173,46 +175,7 @@ public class HelloLenskit implements Runnable{
 
 
     public void run() {
-
-        // =============== heap memory test ===============================
-        int mb = 1024*1024;
-        //Getting the runtime reference from system
-        Runtime runtime = Runtime.getRuntime();
-        System.out.println("=============================================================");
-        System.out.println("##### Heap utilization statistics [MB] - run() started #####");
-        System.out.println("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
-        System.out.println("Free Memory:" + runtime.freeMemory() / mb);
-        System.out.println("Total Available Memory:" + runtime.totalMemory() / mb);
-        System.out.println("Max Available Memory:" + runtime.maxMemory() / mb);
-        System.out.println("=============================================================");
-        // ================================================================
-        // =============== log to file ====================================
-        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-        Date date = new Date();
-        try {
-            writer = new FileWriter(getLogFile(), true);
-            bufferedWriter = new BufferedWriter(writer);
-            bufferedWriter.write("=============================================================");
-            bufferedWriter.newLine();
-            bufferedWriter.write("##### Heap utilization statistics [MB] - run() started #####");
-            bufferedWriter.newLine();
-            bufferedWriter.write("Time: " + dateFormat.format(date));
-            bufferedWriter.newLine();
-            bufferedWriter.write("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
-            bufferedWriter.newLine();
-            bufferedWriter.write("Free Memory:" + runtime.freeMemory() / mb);
-            bufferedWriter.newLine();
-            bufferedWriter.write("Total Available Memory:" + runtime.totalMemory() / mb);
-            bufferedWriter.newLine();
-            bufferedWriter.write("Max Available Memory:" + runtime.maxMemory() / mb);
-            bufferedWriter.newLine();
-            bufferedWriter.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        // =================================================================
-
-
+        HeapMemoryPrinter(1);
         // We first need to configure the data access.
         // We will load data from a static data source; you could implement your own DAO
         // on top of a database of some kind
@@ -233,6 +196,9 @@ public class HelloLenskit implements Runnable{
         // results will be written in the test ouput file.
 
         if (mode.equals("Train")) {
+            //Train doesn't need total_items nor out_names
+            total_items = null;
+            out_names = null;
             // Next: load the LensKit algorithm configuration
             LenskitConfiguration config;
             try {
@@ -263,41 +229,9 @@ public class HelloLenskit implements Runnable{
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            // =============== heap memory test ===============================
-            //Getting the runtime reference from system
-            runtime = Runtime.getRuntime();
-            System.out.println("=============================================================");
-            System.out.println("##### Heap utilization statistics [MB] - Train Engine Completed #####");
-            System.out.println("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
-            System.out.println("Free Memory:" + runtime.freeMemory() / mb);
-            System.out.println("Total Available Memory:" + runtime.totalMemory() / mb);
-            System.out.println("Max Available Memory:" + runtime.maxMemory() / mb);
-            System.out.println("=============================================================");
-            // ================================================================
-            // =============== log to file ====================================
-            date = new Date();
-            try{
-                bufferedWriter.write("=============================================================");
-                bufferedWriter.newLine();
-                bufferedWriter.write("##### Heap utilization statistics [MB] - Train Engine Completed #####");
-                bufferedWriter.newLine();
-                bufferedWriter.write("Time: " + dateFormat.format(date));
-                bufferedWriter.newLine();
-                bufferedWriter.write("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
-                bufferedWriter.newLine();
-                bufferedWriter.write("Free Memory:" + runtime.freeMemory() / mb);
-                bufferedWriter.newLine();
-                bufferedWriter.write("Total Available Memory:" + runtime.totalMemory() / mb);
-                bufferedWriter.newLine();
-                bufferedWriter.write("Max Available Memory:" + runtime.maxMemory() / mb);
-                bufferedWriter.newLine();
-                bufferedWriter.close();
-                writer.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            // =================================================================
-        } else if(mode.equals("Test")){
+            HeapMemoryPrinter(2);
+        }
+        else if (mode.equals("Test")){
             converter();
             FileWriter fw = null;
             File modelFile = new File(getModelFile());
@@ -333,53 +267,25 @@ public class HelloLenskit implements Runnable{
 
                     logger.info("Building {} Threads", n_threads);
                     for(int i = 0; i < n_threads; i++ ){
+                        int thread_items = items_by_thread * i;
                         if (i < n_threads -1)
-                            Pool[i] = new Thread(new MyThread(items_by_thread * i, items_by_thread, getAmountRecs(), irec, dao, fw));
-                        else
-                            Pool[i] = new Thread(new MyThread(items_by_thread * i, (total_items.size()-((n_threads-1)*items_by_thread)), getAmountRecs(), irec, dao, fw));
+                            Pool[i] = new Thread(new MyThread(thread_items, items_by_thread, getAmountRecs(),
+                                    total_items, out_names, irec, dao, fw));
+                        else {
+                            int items_by_thread_x = (total_items.size() - ((n_threads - 1) * items_by_thread));
+                            Pool[i] = new Thread(new MyThread(thread_items, items_by_thread_x, getAmountRecs(),
+                                    total_items, out_names, irec, dao, fw));
+                        }
                         Pool[i].start();
                     }
                     logger.info("Threads Running");
                     for (int j = 0; j < n_threads; j++) {
                         Pool[j].join();
+                        Pool[j] = null;
                     }
                     thread_timer.stop();
                     logger.info("recommended in {}", thread_timer);
-
-                    // =============== heap memory test ===============================
-                    //Getting the runtime reference from system
-                    runtime = Runtime.getRuntime();
-                    System.out.println("=============================================================");
-                    System.out.println("##### Heap utilization statistics [MB] - Test Completed #####");
-                    System.out.println("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
-                    System.out.println("Free Memory:" + runtime.freeMemory() / mb);
-                    System.out.println("Total Available Memory:" + runtime.totalMemory() / mb);
-                    System.out.println("Max Available Memory:" + runtime.maxMemory() / mb);
-                    System.out.println("=============================================================");
-                    // ================================================================
-                    // =============== log to file ====================================
-                    date = new Date();
-                    try{
-                        bufferedWriter.write("=============================================================");
-                        bufferedWriter.newLine();
-                        bufferedWriter.write("##### Heap utilization statistics [MB] - Test Completed #####");
-                        bufferedWriter.newLine();
-                        bufferedWriter.write("Time: " + dateFormat.format(date));
-                        bufferedWriter.newLine();
-                        bufferedWriter.write("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
-                        bufferedWriter.newLine();
-                        bufferedWriter.write("Free Memory:" + runtime.freeMemory() / mb);
-                        bufferedWriter.newLine();
-                        bufferedWriter.write("Total Available Memory:" + runtime.totalMemory() / mb);
-                        bufferedWriter.newLine();
-                        bufferedWriter.write("Max Available Memory:" + runtime.maxMemory() / mb);
-                        bufferedWriter.newLine();
-                        bufferedWriter.close();
-                        writer.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    // =================================================================
+                    HeapMemoryPrinter(3);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -452,37 +358,92 @@ public class HelloLenskit implements Runnable{
             }
         }
     }
+
+    public void HeapMemoryPrinter(int i){
+        // =============== heap memory test ===============================
+        int mb = 1024*1024;
+        //Getting the runtime reference from system
+        Runtime runtime = Runtime.getRuntime();
+        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+        Date date = new Date();
+        System.out.println("=============================================================");
+        if (i == 1)
+            System.out.println("##### Heap utilization statistics [MB] - run() started #####");
+        if (i == 2)
+            System.out.println("##### Heap utilization statistics [MB] - Train Engine Completed #####");
+        if (i == 3)
+            System.out.println("##### Heap utilization statistics [MB] - Test Completed #####");
+        System.out.println("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+        System.out.println("Free Memory:" + runtime.freeMemory() / mb);
+        System.out.println("Total Available Memory:" + runtime.totalMemory() / mb);
+        System.out.println("Max Available Memory:" + runtime.maxMemory() / mb);
+        System.out.println("=============================================================");
+        // ================================================================
+        // =============== log to file ====================================
+        try {
+            writer = new FileWriter(getLogFile(), true);
+            bufferedWriter = new BufferedWriter(writer);
+            bufferedWriter.write("=============================================================");
+            bufferedWriter.newLine();
+            if (i == 1)
+                bufferedWriter.write("##### Heap utilization statistics [MB] - run() started #####");
+            if (i == 2)
+                bufferedWriter.write("##### Heap utilization statistics [MB] - Train Engine Completed #####");
+            if (i == 3)
+                bufferedWriter.write("##### Heap utilization statistics [MB] - Test Completed #####");
+            bufferedWriter.newLine();
+            bufferedWriter.write("Time: " + dateFormat.format(date));
+            bufferedWriter.newLine();
+            bufferedWriter.write("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+            bufferedWriter.newLine();
+            bufferedWriter.write("Free Memory:" + runtime.freeMemory() / mb);
+            bufferedWriter.newLine();
+            bufferedWriter.write("Total Available Memory:" + runtime.totalMemory() / mb);
+            bufferedWriter.newLine();
+            bufferedWriter.write("Max Available Memory:" + runtime.maxMemory() / mb);
+            bufferedWriter.newLine();
+            bufferedWriter.flush();
+            if (i == 2 || i == 3)
+                bufferedWriter.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
 
 class MyThread extends Thread {
 
-    private int index;
-    private int thread_num;
-    private int AmountRecs;
-    private ItemBasedItemRecommender irec;
-    private DataAccessObject dao;
+    private final int index;
+    private final int thread_num;
+    private static volatile int AmountRecs;
+    private static volatile ItemBasedItemRecommender irec;
+    private static volatile DataAccessObject dao;
+    private static volatile List<List<Long>> total_items;
+    private static volatile List<String> out_names;
     private FileWriter fw;
     private final Object lock_if = new Object();
     private final Object lock_else = new Object();
     private final Object lock_writer = new Object();
-    //private List<List<Long>> total_items;
-    //private List<String> out_names;
 
-    public MyThread(int index, int thread_num, int AmountRecs, ItemBasedItemRecommender irec, DataAccessObject dao, FileWriter fw) {
-        this.index = index;
-        this.thread_num = thread_num;
-        this.AmountRecs = AmountRecs;
-        this.irec = irec;
-        this.dao = dao;
-        this.fw = fw;
+    public MyThread(int Index, int Thread_num, int amountRecs,
+                    List<List<Long>> Total_items, List<String> Out_names,
+                    ItemBasedItemRecommender Irec, DataAccessObject Dao, FileWriter Fw) {
+        index = Index;
+        thread_num = Thread_num;
+        AmountRecs = amountRecs;
+        total_items = Total_items;
+        out_names = Out_names;
+        irec = Irec;
+        dao = Dao;
+        fw = Fw;
     }
 
     public void run() {
         String to_append="";
         for (int i = index; i < index + thread_num; i++) {
-            List<Long> used_items = HelloLenskit.total_items.get(i);
+            List<Long> used_items = total_items.get(i);
             Entity AppData = dao.lookupEntity(CommonTypes.ITEM, used_items.get(0));
-            String AppName = null;
+            String AppName;
             if (AppData != null) {
                 ResultList recs = irec.recommendRelatedItemsWithDetails(LongUtils.packedSet(used_items), AmountRecs, null, null);
                 synchronized (lock_if) {
@@ -505,7 +466,7 @@ class MyThread extends Thread {
             }
             else {
                 synchronized (lock_else) {
-                    to_append = to_append + HelloLenskit.out_names.get(HelloLenskit.out_names_index) + "\n";
+                    to_append = to_append + out_names.get(HelloLenskit.out_names_index) + "\n";
                     HelloLenskit.out_names_index++;
                 }
             }
