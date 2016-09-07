@@ -1,22 +1,16 @@
-# LensKit Demo Project
+# LensKit Aptoide Project
 
-[![Join the chat at https://gitter.im/lenskit/lenskit](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lenskit/lenskit?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+This project is the Aptoide's approach towards using Lenskit as the recommendation
+engine. It is prepared to run a Item-Item Colaborative Filtering algorithm querying
+by item instead of user. To run Aptoide's extensive dataset several objects had to
+be serialized so memory is not an issue. To speed up the training and the testing
+some parallelization has been done so it can take the most of the hardware.
 
-This is a demo project that shows how to create a project using [LensKit][] and set
-get the recommender running.  It creates a simple command line application that
-builds a recommender from a delimited text file of ratings, then recommends items
-for users specified at the command line.
-
-The main code is in `org.grouplens.lenskit.hello.HelloLenskit`. There are comments
-so you can follow along and see what each stage of the process does.
-
-If you are building a web application, you will need to adapt this project. But the
-basic things done in that class will need to be done in your application somewhere.
+The algorithm configuration is at the basket.groovy file, where we set every parameter
+required to run.
 
 The [LensKit home page][LensKit] has further documentation for LensKit, as well as
-links to our bug tracker and wiki. Also be sure to subscribe to our [mailing list][]
-and ask any further questions you may have about using LensKit, and follow our
-[Twitter account][LensKitRS] for updates on new releases and developments.
+links to their bug tracker and wiki.
 
 ## Project Setup
 
@@ -33,36 +27,41 @@ this for how we pull in LensKit, and how to depend on other modules.
 In the Gradle build, we use the Application plugin to create a shell script and copy
 the dependency JARs in order to run the LensKit application.
 
-LensKit Hello runs on a copy of the MovieLens Latest Small data set, included in the `data` directory.
-More up-to-date versions of this data set, along with a larger data set of 20M ratings, can be downloaded
-from <http://grouplens.org/datasets/movielens/>.
+LensKit Aptoide runs on a copy of the Applications data set, included in the `data` directory.
+This data is unary and is split in two different files; appNames.csv (contains app names and app id's)
+and exploded.csv (each line contains user:item:value:timestamp).
+To change the dataset one has to change the .yml file wich makes the path later for the dataset files.
 
 You can run lenskit-hello through your IDE, or from the command line
 as follows:
 
     $ ./gradlew build
-    $ /bin/sh build/install/lenskit-hello/bin/lenskit-hello <userid>
+    $ ./build/install/lenskit-aptoide/bin/lenskit-aptoide [FLAG] [CONFIG file]
     
 If you are on Windows, do:
 
     C:\LensKit\lenskit-hello> .\gradlew.bat build
-    C:\LensKit\lenskit-hello> .\build\install\lenskit-hello\bin\lenskit-hello.bat <userid>
+    C:\LensKit\lenskit-hello> .\build\install\lenskit-aptoide\bin\lenskit-aptoide.bat [FLAG] [CONFIG file]
+    
 
-A user ID of 72 is valid and good for a quick demo.  You can specify more than one user ID, and it will
-produce recommendations for each user.
+### [FLAG]
+
+We can run Lenskit Aptoide either on Train mode or Test mode.
+The Train mode provides a compressed model for later use.
+The Test mode receives a compressed model and returns recommendations.
+
+At the [CONFIG file] is where we settle things like dataset path and compressed model path.
+Right now the file must have in the following order:
+    //  1 - Trained Model file (either for input and output);
+    //  2 - Configuration file for training;
+    //  3 - Data file (.yml required);
+    //  4 - Test input file;
+    //  5 - Test output file;
+    //  6 - Log File;
+    //  7 - Number of recommendations needed per item;
+    //  8 - Number of Threads for testing;
 
 Have fun!
 
 [LensKit]: http://lenskit.org
 [gradle]: http://gradle.org
-[mailing list]: https://wwws.cs.umn.edu/mm-cs/listinfo/lenskit
-[LensKitRS]: http://twitter.com/LensKitRS
-
-## Other Versions
-
-Various people have ported the lenskit-hello project to other languages:
-
-- [Clojure](https://github.com/dcj/clj-lenskit-hello) ([original Gist](https://gist.github.com/llasram/6472144))
-- [Python (Jython)](http://pastie.org/8298159)
-- [Ruby (JRuby)](https://gist.github.com/joshjordan/6446324)
-- [Scala](https://github.com/matt-thomson/lenskit-hello-scala/)
