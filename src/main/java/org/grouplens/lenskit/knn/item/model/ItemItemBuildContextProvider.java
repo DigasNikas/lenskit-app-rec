@@ -105,9 +105,9 @@ public class ItemItemBuildContextProvider implements Provider<ItemItemBuildConte
 
         logger.debug("item data completed");
 
-        ItemItemBuildContext object = new ItemItemBuildContext(items, itemRatings, userItems);
-        try {
-            FileOutputStream f_out = new FileOutputStream("initial_model.data");
+        //ItemItemBuildContext object = new ItemItemBuildContext(items, itemRatings, userItems);
+        /*try {
+            FileOutputStream f_out = new FileOutputStream("etc/initial_model.data");
             ObjectOutputStream obj_out = new ObjectOutputStream (f_out);
             obj_out.writeObject(object);
             obj_out.close();
@@ -116,11 +116,11 @@ public class ItemItemBuildContextProvider implements Provider<ItemItemBuildConte
             System.err.println(e.toString());
             e.printStackTrace(System.err);
             System.exit(1);
-        }
+        }*/
 
-        //return new ItemItemBuildContext(items, itemRatings, userItems);
-        object = new ItemItemBuildContext(null,null,null);
-        return object;
+        return new ItemItemBuildContext(items, itemRatings, userItems);
+        //object = new ItemItemBuildContext(null,null,null);
+        //return object;
     }
 
     /**

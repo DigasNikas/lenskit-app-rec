@@ -134,39 +134,39 @@ public class HelloLenskit implements Runnable{
         return config_file;
     }
 
-    public String getModelFile(){
+    private String getModelFile(){
         return config_file.get(0);
     }
 
-    public String getConfigFile(){
+    private String getConfigFile(){
         return config_file.get(1);
     }
 
-    public String getDataFile(){
+    private String getDataFile(){
         return config_file.get(2);
     }
 
-    public String getAppNameFile(){
+    private String getAppNameFile(){
         return config_file.get(3);
     }
 
-    public String getTestInputFile(){
+    private String getTestInputFile(){
         return config_file.get(4);
     }
 
-    public String getTestOutPutFile(){
+    private String getTestOutPutFile(){
         return config_file.get(5);
     }
 
-    public String getLogFile(){
+    private String getLogFile(){
         return config_file.get(6);
     }
 
-    public int getAmountRecs(){
+    private int getAmountRecs(){
         return Integer.valueOf(config_file.get(7));
     }
 
-    public String getNumberThreads(){
+    private String getNumberThreads(){
         return config_file.get(8);
     }
 
@@ -244,8 +244,8 @@ public class HelloLenskit implements Runnable{
                 logger.info("loading recommender from {}", modelFile);
                 timerX.stop();
                 logger.info("loaded recommender engine in {}", timerX);
-                FileWriter fw = new FileWriter(getTestOutPutFile());
-                bufferedWriter = new BufferedWriter(fw);
+                /*FileWriter fw = new FileWriter(getTestOutPutFile());
+                bufferedWriter = new BufferedWriter(fw);*/
                 // Finally, get the recommender and use it.
                 try (LenskitRecommender rec = engine.createRecommender(dao)) {
                     logger.info("obtained recommender from engine");
@@ -268,11 +268,11 @@ public class HelloLenskit implements Runnable{
                         int thread_items = items_by_thread * i;
                         if (i < n_threads -1)
                             Pool[i] = new Thread(new MyThread(thread_items, items_by_thread, getAmountRecs(),
-                                    total_items, out_names, irec, dao, bufferedWriter));
+                                    total_items, out_names, irec, dao, bufferedWriter, i));
                         else {
                             int items_by_thread_x = (total_items.size() - ((n_threads - 1) * items_by_thread));
                             Pool[i] = new Thread(new MyThread(thread_items, items_by_thread_x, getAmountRecs(),
-                                    total_items, out_names, irec, dao, bufferedWriter));
+                                    total_items, out_names, irec, dao, bufferedWriter, i));
                         }
                         Pool[i].start();
                     }
@@ -343,6 +343,8 @@ public class HelloLenskit implements Runnable{
         }
         /////////////////////////////////////
         // PROCURAR NA HASHMAP PELOS NOMES E DEVOLVER ID E COLOCAR NA LISTA PARA RECOMENDAÇÃO
+        int k = 0;
+        int x = 0;
         for (String arg: names) {
             items = new ArrayList<>(arg.length());
             if(idCode.containsKey(arg)) {
@@ -415,35 +417,45 @@ class MyThread extends Thread {
 
     private final int index;
     private final int thread_num;
+    private final int thread_index;
     private static volatile int AmountRecs;
     private static volatile ItemBasedItemRecommender irec;
     private static volatile DataAccessObject dao;
     private static volatile List<List<Long>> total_items;
     private static volatile List<String> out_names;
-    private BufferedWriter bufferedWriter;
+    //private BufferedWriter bufferedWriter;
     private final Object lock_if = new Object();
     private final Object lock_else = new Object();
     private final Object lock_writer = new Object();
 
     public MyThread(int Index, int Thread_num, int amountRecs,
                     List<List<Long>> Total_items, List<String> Out_names,
-                    ItemBasedItemRecommender Irec, DataAccessObject Dao, BufferedWriter BufferedWriter) {
+                    ItemBasedItemRecommender Irec, DataAccessObject Dao, BufferedWriter BufferedWriter, int i) {
         index = Index;
         thread_num = Thread_num;
+        thread_index = i;
         AmountRecs = amountRecs;
         total_items = Total_items;
         out_names = Out_names;
         irec = Irec;
         dao = Dao;
-        bufferedWriter= BufferedWriter;
+        //bufferedWriter= BufferedWriter;
     }
 
     public void run() {
-        String to_append="";
+        BufferedWriter bufferedWriter = null;
+        try {
+            FileWriter fw = new FileWriter("etc/test_output" + thread_index + ".txt");
+            bufferedWriter = new BufferedWriter(fw);
+        }catch (Exception e){
+            e.printStackTrace();
+            System.exit(1);
+        }
         for (int i = index; i < index + thread_num; i++) {
             List<Long> used_items = total_items.get(i);
             Entity AppData = dao.lookupEntity(CommonTypes.ITEM, used_items.get(0));
             String AppName;
+            String to_append = "";
             if (AppData != null) {
                 ResultList recs = irec.recommendRelatedItemsWithDetails(LongUtils.packedSet(used_items), AmountRecs, null, null);
                 synchronized (lock_if) {
@@ -470,13 +482,13 @@ class MyThread extends Thread {
                     HelloLenskit.out_names_index++;
                 }
             }
-        }
-        try {
-            synchronized (lock_writer) {
-                bufferedWriter.write(to_append);
+            try {
+                synchronized (lock_writer) {
+                    bufferedWriter.write(to_append);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
     }
 }

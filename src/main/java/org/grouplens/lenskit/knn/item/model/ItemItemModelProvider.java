@@ -41,6 +41,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import java.io.*;
+import java.text.DecimalFormat;
 import java.util.Scanner;
 import java.util.StringTokenizer;
 
@@ -61,8 +62,8 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
     private final NeighborIterationStrategy neighborStrategy;
     private final int minCommonUsers;
     private final int modelSize;
-    //private BufferedWriter bufferedWriter;
-    //private ProgressLogger progress;
+    public static volatile int items_done;
+    public static volatile int nitems;
 
     @Inject
     public ItemItemModelProvider(@Transient ItemSimilarity similarity,
@@ -72,17 +73,20 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                                  @MinCommonUsers int minCU,
                                  @ModelSize int size) {
         itemSimilarity = similarity;
-        buildContext = getContext();
+        buildContext = context;
+        //buildContext = getContext();
         threshold = thresh;
         neighborStrategy = nbrStrat;
         minCommonUsers = minCU;
         modelSize = size;
+        items_done = 0;
+        nitems = 0;
     }
 
     @Override
     public SimilarityMatrixModel get() {
         LongSortedSet allItems = buildContext.getItems();
-        final int nitems = allItems.size();
+        nitems = allItems.size();
 
         logger.info("building item-item model for {} items", nitems);
         logger.debug("using similarity function {}", itemSimilarity);
@@ -90,18 +94,6 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
                      itemSimilarity.isSparse() ? "sparse" : "non-sparse");
         logger.debug("similarity function is {}",
                      itemSimilarity.isSymmetric() ? "symmetric" : "non-symmetric");
-
-        BufferedWriter bufferedWriter = null;
-        try {
-            File fileTwo = new File("similarities.tmp");
-            FileOutputStream fos = new FileOutputStream(fileTwo);
-            PrintWriter pw = new PrintWriter(fos);
-            bufferedWriter = new BufferedWriter(pw);
-        }catch(Exception e){
-            System.err.println(e.toString());
-            e.printStackTrace(System.err);
-            System.exit(1);
-        }
 
         ProgressLogger progress = ProgressLogger.create(logger)
                 .setCount(nitems)
@@ -111,23 +103,27 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
 
         int n_threads = Runtime.getRuntime().availableProcessors();
         Thread Pool[] = new Thread[n_threads];
-        int items_by_thread = nitems/n_threads;
+        //int items_by_thread = nitems/n_threads;
 
-        logger.info("Building {} Threads", n_threads);
+        int previous_items = 0;
+        logger.info("Building {} SimilarityThreads", n_threads);
         for(int i = 0; i < n_threads; i++ ){
 
-            int items = i*items_by_thread;
+            double items_by = nitems / ((double)n_threads * (double)(n_threads-(i+1)) * (double)((n_threads-(i+1)) * (n_threads-(i+1))));
+            int items_by_thread = (int) items_by;
+
             if (i < n_threads -1) {
-                LongIterator outer = allItems.subSet(items, items + items_by_thread).iterator();
-                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, bufferedWriter, buildContext,
-                        threshold, neighborStrategy, minCommonUsers, progress));
+                LongIterator outer = allItems.subSet(previous_items, previous_items + items_by_thread).iterator();
+                Pool[i] = new Thread(new SimilarityThread(outer, itemSimilarity, i, buildContext,
+                        threshold, neighborStrategy, minCommonUsers));
             }
             else {
                 int k = (nitems - ((n_threads - 1) * items_by_thread));
-                LongIterator outer = allItems.subSet(items, items + k).iterator();
-                Pool[i] = new Thread(new MyThread(outer, itemSimilarity, bufferedWriter, buildContext,
-                        threshold,neighborStrategy,minCommonUsers, progress));
+                LongIterator outer = allItems.subSet(previous_items, previous_items + items_by_thread + k).iterator();
+                Pool[i] = new Thread(new SimilarityThread(outer, itemSimilarity, i, buildContext,
+                        threshold,neighborStrategy,minCommonUsers));
             }
+            previous_items = previous_items + items_by_thread;
             Pool[i].start();
 
         }
@@ -141,7 +137,6 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
             for (int j = 0; j < n_threads; j++) {
                 Pool[j]=null;
             }
-            bufferedWriter.close();
         }catch (Exception e){
             e.printStackTrace();
         }
@@ -153,14 +148,26 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
         //Get rid of builContext to save memory
         buildContext = null;
 
-        logger.info("Building Object from similarities.csv");
+        logger.info("Building Object from similarities files");
+
         Stopwatch timerX;
         timerX = Stopwatch.createStarted();
-        Long2ObjectMap<ScoredIdAccumulator> rows = buildRows(allItems);
-        timerX.stop();
 
+        Long2ObjectMap<ScoredIdAccumulator> rows = buildRows(allItems, n_threads);
+        timerX.stop();
         logger.info("built object in {}",timerX);
-        return new SimilarityMatrixModel(finishRows(rows));
+
+        logger.info("Writing Object in rows.tmp");
+        rowsWriter(rows);
+        int size = rows.size();
+        logger.info("{}", size);
+
+        //Get rid of rows to save memory
+        rows = null;
+        Long2ObjectMap<Long2DoubleMap> rows2 = new Long2ObjectOpenHashMap<>(size);
+
+        logger.info("Finishing SimilarityMatrixModel");
+        return new SimilarityMatrixModel(finishRows(rows2));
     }
 
     private Long2ObjectMap<ScoredIdAccumulator> makeAccumulators(LongSet items) {
@@ -179,18 +186,47 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
         return rows;
     }
 
-    private Long2ObjectMap<Long2DoubleMap> finishRows(Long2ObjectMap<ScoredIdAccumulator> rows) {
-        Long2ObjectMap<Long2DoubleMap> results = new Long2ObjectOpenHashMap<>(rows.size());
-        for (Long2ObjectMap.Entry<ScoredIdAccumulator> e: rows.long2ObjectEntrySet()) {
-            results.put(e.getLongKey(), e.getValue().finishMap());
-        }
+    private Long2ObjectMap<Long2DoubleMap> finishRows(Long2ObjectMap<Long2DoubleMap> results) {
+        try {
+            File toRead = new File("etc/rows.tmp");
+            FileInputStream fis = new FileInputStream(toRead);
+            boolean cont = true;
+
+            try {
+                ObjectInputStream input = new ObjectInputStream(fis);
+                while (cont) {
+                    Object obj = input.readObject();
+                    Long2ObjectMap.Entry<ScoredIdAccumulator> e = (Long2ObjectMap.Entry<ScoredIdAccumulator>)obj;
+                    if(obj != null)
+                        results.put(e.getLongKey(), e.getValue().finishMap());
+                    else
+                        cont = false;
+                }
+            } catch (Exception e){}
+        } catch (Exception e){}
         return results;
+    }
+
+    private void rowsWriter(Long2ObjectMap<ScoredIdAccumulator> rows){
+        try {
+            File fileTwo = new File("etc/rows.tmp");
+            FileOutputStream fos = new FileOutputStream(fileTwo);
+            ObjectOutputStream pos = new ObjectOutputStream(fos);
+            for (Long2ObjectMap.Entry<ScoredIdAccumulator> e: rows.long2ObjectEntrySet()) {
+                pos.writeObject(e);
+            }
+            pos.close();
+        }catch(Exception e){
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
     }
 
     private ItemItemBuildContext getContext(){
         ItemItemBuildContext buildContext = null;
         try {
-            InputStream fis = new FileInputStream("initial_model.data");
+            InputStream fis = new FileInputStream("etc/initial_model.data");
             InputStream buffer = new BufferedInputStream(fis);
             ObjectInputStream ois = new ObjectInputStream (buffer);
             buildContext = (ItemItemBuildContext) ois.readObject();
@@ -204,63 +240,86 @@ public class ItemItemModelProvider implements Provider<ItemItemModel> {
         return buildContext;
     }
 
-    private Long2ObjectMap<ScoredIdAccumulator> buildRows(LongSortedSet allItems){
+    private Long2ObjectMap<ScoredIdAccumulator> buildRows(LongSortedSet allItems, int i){
         Long2ObjectMap<ScoredIdAccumulator> rows = makeAccumulators(allItems);
-        try {
-            File toRead = new File("similarities.tmp");
-            FileInputStream fis = new FileInputStream(toRead);
+        for (int k = 0; k < i; k++) {
+            try {
+                File toRead = new File("etc/similarities"+k+".tmp");
+                FileInputStream fis = new FileInputStream(toRead);
 
-            Scanner sc = new Scanner(fis);
+                Scanner sc = new Scanner(fis);
 
-            String currentLine;
-            while(sc.hasNextLine()){
-                currentLine=sc.nextLine();
-                StringTokenizer st=new StringTokenizer(currentLine,",",false);
-                rows.get(Long.valueOf(st.nextToken())).put(Long.valueOf(st.nextToken()), Double.valueOf(st.nextToken()));
+                String currentLine;
+                try {
+                    while (sc.hasNextLine()) {
+                        currentLine = sc.nextLine();
+                        StringTokenizer st = new StringTokenizer(currentLine, ",", false);
+                        rows.get(Long.valueOf(st.nextToken())).put(Long.valueOf(st.nextToken()), Double.valueOf(st.nextToken()));
+                    }
+                }catch (Exception e){
+                    System.err.println(e.toString());
+                    e.printStackTrace(System.err);
+                    System.exit(1);
+                }
+                fis.close();
+            } catch (Exception e) {
+                System.err.println(e.toString());
+                e.printStackTrace(System.err);
+                System.exit(1);
             }
-            fis.close();
-        }
-        catch(Exception e){
-            System.err.println(e.toString());
-            e.printStackTrace(System.err);
-            System.exit(1);
         }
         return rows;
     }
 }
 
-class MyThread extends Thread {
+class SimilarityThread extends Thread {
     private static volatile ItemSimilarity itemSimilarity;
     private final LongIterator outer;
-    private BufferedWriter bufferedWriter;
     private static volatile ItemItemBuildContext buildContext;
     private static volatile Threshold threshold;
     private static volatile NeighborIterationStrategy neighborStrategy;
     private static volatile int minCommonUsers;
-    private static volatile ProgressLogger progress;
+    private final int thread_index;
+    private final Object lock = new Object();
 
-    public MyThread(LongIterator Outer, ItemSimilarity Similarity, BufferedWriter BufferedWriter,
+    public SimilarityThread(LongIterator Outer, ItemSimilarity Similarity, int i,
                     ItemItemBuildContext BuildContext, Threshold Threshold, NeighborIterationStrategy NeighborStrategy,
-                    int MinCommonUsers, ProgressLogger Progress){
+                    int MinCommonUsers){
         outer = Outer;
         itemSimilarity = Similarity;
-        bufferedWriter = BufferedWriter;
         buildContext = BuildContext;
         threshold = Threshold;
         neighborStrategy = NeighborStrategy;
         minCommonUsers = MinCommonUsers;
-        progress = Progress;
+        thread_index = i;
     }
 
     public void run() {
+
+        BufferedWriter bufferedWriter = null;
+        try {
+            File fileTwo = new File("etc/similarities"+thread_index+".tmp");
+            FileOutputStream fos = new FileOutputStream(fileTwo);
+            PrintWriter pw = new PrintWriter(fos);
+            bufferedWriter = new BufferedWriter(pw);
+        }catch(Exception e){
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
+        }
+        Stopwatch timer;
+        timer = Stopwatch.createStarted();
+        int inside_items = 0;
         OUTER:
         while (outer.hasNext()) {
             final long itemId1 = outer.nextLong();
-            //System.out.println(itemId1);
             SparseVector vec1 = buildContext.itemVector(itemId1);
             if (vec1.size() < minCommonUsers) {
                 // if it doesn't have enough users, it can't have enough common users
-                progress.advance();
+                inside_items++;
+                synchronized (lock) {
+                    ItemItemModelProvider.items_done++;
+                }
                 continue OUTER;
             }
 
@@ -278,6 +337,8 @@ class MyThread extends Thread {
                     }
 
                     double sim = itemSimilarity.similarity(itemId1, vec1, itemId2, vec2);
+                    sim = Math.round(sim * 100.0);
+                    sim = sim / 100.0;
                     if (threshold.retain(sim)) {
                         if (itemSimilarity.isSymmetric()) {
                             try {
@@ -291,7 +352,26 @@ class MyThread extends Thread {
                     }
                 }
             }
-            progress.advance();
+            inside_items++;
+            synchronized (lock) {
+                ItemItemModelProvider.items_done++;
+            }
+        }
+        try {
+            timer.stop();
+            FileWriter writer = new FileWriter("etc/BasketRun.log", true);
+            BufferedWriter Writer = new BufferedWriter(writer);
+            Writer.write("Thread "
+                    +thread_index+" computed "
+                    +inside_items+" out of "
+                    +ItemItemModelProvider.nitems+" in "
+                    +timer+"\n");
+            Writer.flush();
+            bufferedWriter.close();
+        } catch (Exception e){
+            System.err.println(e.toString());
+            e.printStackTrace(System.err);
+            System.exit(1);
         }
     }
 }
