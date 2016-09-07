@@ -4,7 +4,7 @@ This project is the Aptoide's approach towards using Lenskit as the recommendati
 engine. It is prepared to run a Item-Item Colaborative Filtering algorithm querying
 by item instead of user. To run Aptoide's extensive dataset several objects had to
 be serialized so memory is not an issue. To speed up the training and the testing
-some parallelization has been done so it can take the most of the hardware.
+some parallelization has been done so it can take the most out of the hardware.
 
 The algorithm configuration is at the basket.groovy file, where we set every parameter
 required to run.
@@ -28,9 +28,10 @@ In the Gradle build, we use the Application plugin to create a shell script and 
 the dependency JARs in order to run the LensKit application.
 
 LensKit Aptoide runs on a copy of the Applications data set, included in the `data` directory.
-This data is unary and is split in two different files; appNames.csv (contains app names and app id's)
-and exploded.csv (each line contains user:item:value:timestamp).
-To change the dataset one has to change the .yml file wich makes the path later for the dataset files.
+This data is unary and is split in two different files: 
+    appNames.csv (contains app names and app id's)
+    exploded.csv (each line contains user:item:value:timestamp).
+To change the dataset one has to change the .yml file wich.
 
 You can run lenskit-hello through your IDE, or from the command line
 as follows:
@@ -44,22 +45,22 @@ If you are on Windows, do:
     C:\LensKit\lenskit-hello> .\build\install\lenskit-aptoide\bin\lenskit-aptoide.bat [FLAG] [CONFIG file]
     
 
-### [FLAG]
+### Arguments
 
-We can run Lenskit Aptoide either on Train mode or Test mode.
+We can run Lenskit Aptoide either on Train mode or Test mode just by changing the [FLAG].
 The Train mode provides a compressed model for later use.
 The Test mode receives a compressed model and returns recommendations.
 
 At the [CONFIG file] is where we settle things like dataset path and compressed model path.
 Right now the file must have in the following order:
-    //  1 - Trained Model file (either for input and output);
-    //  2 - Configuration file for training;
-    //  3 - Data file (.yml required);
-    //  4 - Test input file;
-    //  5 - Test output file;
-    //  6 - Log File;
-    //  7 - Number of recommendations needed per item;
-    //  8 - Number of Threads for testing;
+    1 - Trained Model file (either for input and output);
+    2 - Configuration file for training;
+    3 - Data file (.yml required);
+    4 - Test input file;
+    5 - Test output file;
+    6 - Log File;
+    7 - Number of recommendations needed per item;
+    8 - Number of Threads for testing;
 
 Have fun!
 
