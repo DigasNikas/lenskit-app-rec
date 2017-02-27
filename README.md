@@ -1,10 +1,8 @@
 # LensKit Aptoide Project
 
-This project is the Aptoide's approach towards using Lenskit as the recommendation
-engine. It is prepared to run a Item-Item Colaborative Filtering algorithm querying
-by item instead of user. To run Aptoide's extensive dataset several objects had to
-be serialized so memory is not an issue. To speed up the training and the testing
-some parallelization has been done so it can take the most out of the hardware.
+This project is prepared to run a Item-Item Colaborative Filtering algorithm querying
+by item instead of user. To extensive datasets several objects had to
+be serialized so memory is not an issue. To speed up the training and the testing parallelization of Item-Item has been done so it can take the most out of the hardware.
 
 The algorithm configuration is at the basket.groovy file, where we set every parameter
 required to run.
@@ -27,7 +25,7 @@ this for how we pull in LensKit, and how to depend on other modules.
 In the Gradle build, we use the Application plugin to create a shell script and copy
 the dependency JARs in order to run the LensKit application.
 
-LensKit Aptoide runs on a copy of the Applications data set, included in the `data` directory.
+This project runs on a copy of the Applications data set, included in the `data` directory.
 This data is unary and is split in two different files: 
     appNames.csv (contains app names and app id's)
     exploded.csv (each line contains user:item:value:timestamp).
@@ -47,7 +45,7 @@ If you are on Windows, do:
 
 ### Arguments
 
-We can run Lenskit Aptoide either on Train mode or Test mode just by changing the [FLAG].
+We can run the project either on Train mode or Test mode just by changing the [FLAG].
 The Train mode provides a compressed model for later use.
 The Test mode receives a compressed model and returns recommendations.
 
