@@ -1,7 +1,7 @@
 # LensKit Aptoide Project
 
 This project is prepared to run a Item-Item Colaborative Filtering algorithm querying
-by item instead of user. To extensive datasets several objects had to
+by item instead of user. To process extensive datasets several objects had to
 be serialized so memory is not an issue. To speed up the training and the testing parallelization of Item-Item has been done so it can take the most out of the hardware.
 
 The algorithm configuration is at the basket.groovy file, where we set every parameter
