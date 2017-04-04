@@ -1,4 +1,4 @@
-# LensKit Aptoide Project
+# LensKit Android App's recommender
 
 This project is prepared to run a Item-Item Colaborative Filtering algorithm querying
 by item instead of user. To process extensive datasets several objects had to
